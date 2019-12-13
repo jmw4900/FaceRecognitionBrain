@@ -7,12 +7,7 @@ import Rank from "./components/Rank/Rank";
 import ImageLinkForm from "./components/ImageLinkForm/ImageLinkForm";
 import FaceRecognition from "./components/FaceRecognition/FaceRecognition";
 import Particles from "react-particles-js";
-import Clarifai from "clarifai";
 import "./App.css";
-
-const app = new Clarifai.App({
-  apiKey: "e8d5815d710e422db996366366249fa4"
-});
 
 const particlasOptions = {
   particles: {
@@ -32,6 +27,38 @@ function App() {
   const [boxes, setBoxes] = useState([]);
   const [route, setRoute] = useState("signin");
   const [isSignedIn, setIsSignedIn] = useState(false);
+  const [user, setUser] = useState({
+    id: "",
+    name: "",
+    email: "",
+    entries: 0,
+    joined: ""
+  });
+
+  const resetState = () => {
+    setInput("");
+    setImageUrl("");
+    setBoxes([]);
+    setRoute("signin");
+    setIsSignedIn(false);
+    setUser({
+      id: "",
+      name: "",
+      email: "",
+      entries: 0,
+      joined: ""
+    });
+  };
+
+  const loadUser = data => {
+    setUser({
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      entries: data.entries,
+      joined: data.joined
+    });
+  };
 
   const calculateFaceLocation = data => {
     const faceRegions = data.outputs[0].data.regions;
@@ -59,17 +86,43 @@ function App() {
     setInput(event.target.value);
   };
 
-  const onButtonSubmit = () => {
+  const onPictureSubmit = () => {
     setImageUrl(input);
-    app.models
-      .predict(Clarifai.FACE_DETECT_MODEL, input)
-      .then(response => displayFaceBox(calculateFaceLocation(response)))
+    fetch("http://localhost:3000/imageurl", {
+      method: "post",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        input: input
+      })
+    })
+      // you have to put return
+      .then(response => response.json())
+      .then(response => {
+        if (response) {
+          fetch("http://localhost:3000/image", {
+            method: "put",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: user.id
+            })
+          })
+            .then(response => response.json())
+            .then(count => {
+              setUser({
+                ...user,
+                entries: count
+              });
+            }) // Error handling
+            .catch(console.log);
+        }
+        displayFaceBox(calculateFaceLocation(response));
+      })
       .catch(error => console.log(error));
   };
 
   const onRouteChange = route => {
     if (route === "signout") {
-      setIsSignedIn(false);
+      resetState();
     } else if (route === "home") {
       setIsSignedIn(true);
     }
@@ -83,17 +136,17 @@ function App() {
       {route === "home" ? (
         <>
           <Logo />
-          <Rank />
+          <Rank name={user.name} entries={user.entries} />
           <ImageLinkForm
             onInputChange={onInputChange}
-            onButtonSubmit={onButtonSubmit}
+            onPictureSubmit={onPictureSubmit}
           />
           <FaceRecognition boxes={boxes} imageUrl={imageUrl} />
         </>
       ) : route === "signin" ? (
-        <Signin onRouteChange={onRouteChange} />
+        <Signin onRouteChange={onRouteChange} loadUser={loadUser} />
       ) : (
-        <Register onRouteChange={onRouteChange} />
+        <Register onRouteChange={onRouteChange} loadUser={loadUser} />
       )}
     </div>
   );
